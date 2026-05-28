@@ -35,13 +35,6 @@ type LeadFormData = {
 
 type LeadFormField = keyof LeadFormData;
 
-type LeadFormAnswer = {
-  field: LeadFormField;
-  question: string;
-  answer: string;
-  value: string;
-};
-
 type LeadScoreBreakdownItem = {
   question: string;
   answer: string;
@@ -93,6 +86,22 @@ const formFieldLabels: Record<LeadFormField, string> = {
 };
 
 const formFieldOrder = Object.keys(formFieldLabels) as LeadFormField[];
+
+const formPayloadKeys: Record<LeadFormField, string> = {
+  nome: 'nome',
+  storeName: 'nome_da_loja_marca',
+  email: 'email_corporativo',
+  telefone: 'whatsapp_da_loja',
+  cnpj: 'cnpj',
+  cidade: 'cidade',
+  estado: 'estado',
+  instagram: 'instagram',
+  brandsSold: 'principais_marcas_que_vende_hoje',
+  storeType: 'tipo_de_loja',
+  saleType: 'tipo_de_venda',
+  cnpjAge: 'tempo_de_cnpj',
+  productionPieces: 'pecas_para_o_portfolio'
+};
 
 const DDDS_VALIDOS = [
   11, 12, 13, 14, 15, 16, 17, 18, 19,
@@ -281,13 +290,12 @@ const getFormAnswerLabel = (field: LeadFormField, data: LeadFormData) => {
   return data[field].trim();
 };
 
-const buildFormAnswers = (data: LeadFormData): LeadFormAnswer[] => {
-  return formFieldOrder.map((field) => ({
-    field,
-    question: formFieldLabels[field],
-    answer: getFormAnswerLabel(field, data),
-    value: data[field].trim()
-  }));
+const buildFormAnswers = (data: LeadFormData) => {
+  return Object.fromEntries(
+    formFieldOrder
+      .map((field) => [formPayloadKeys[field], getFormAnswerLabel(field, data)] as const)
+      .filter(([, answer]) => answer.trim())
+  );
 };
 
 const calculateLeadScoreDetails = (data: LeadFormData): LeadScoreDetails => {
@@ -384,42 +392,10 @@ export default function App() {
 
   const buildLeadData = (leadScoreDetails: LeadScoreDetails) => {
     const formAnswers = buildFormAnswers(formData);
-    const formAnswersByField = formAnswers.reduce(
-      (answers, answer) => ({
-        ...answers,
-        [answer.field]: answer
-      }),
-      {} as Record<LeadFormField, LeadFormAnswer>
-    );
 
     return {
-      name: formData.nome.trim(),
-      email: formData.email.trim(),
-      phone: converterParaE164(formData.telefone),
-      city: formData.cidade.trim(),
-      state: formData.estado,
-      state_name: getEstadoLabel(formData.estado),
-      country: 'Brasil',
-      store_name: formData.storeName.trim(),
-      cnpj: formData.cnpj,
-      instagram: formData.instagram.trim(),
-      brands_sold: formData.brandsSold.trim(),
-      store_type: getSelectedLabel('storeType', formData.storeType),
-      sale_type: getSelectedLabel('saleType', formData.saleType),
-      cnpj_age: getSelectedLabel('cnpjAge', formData.cnpjAge),
-      production_pieces: getSelectedLabel('productionPieces', formData.productionPieces),
-      form_answers: formAnswers,
-      form_answers_by_field: formAnswersByField,
-      qualified: leadScoreDetails.qualified,
-      is_disqualified: leadScoreDetails.is_disqualified,
-      disqualification_reason: leadScoreDetails.disqualification_reasons.join('; ') || null,
-      disqualification_reasons: leadScoreDetails.disqualification_reasons,
-      value: leadScoreDetails.value,
-      currency: 'BRL',
-      content_name: 'Formulário de Contato',
-      content_category: 'Lead Generation',
-      lead_score: leadScoreDetails.lead_score,
-      lead_score_details: leadScoreDetails
+      ...formAnswers,
+      lead_score: leadScoreDetails.lead_score
     };
   };
 
@@ -428,11 +404,7 @@ export default function App() {
     const webhookToken = import.meta.env.VITE_WEBHOOK_TOKEN || '';
     const webhookPayload = {
       ...leadData,
-      timestamp: new Date().toISOString(),
-      source: 'landing-page',
-      user_agent: navigator.userAgent,
-      page_url: window.location.href,
-      referrer: document.referrer || 'direct'
+      page_url: window.location.href
     };
 
     const headers: HeadersInit = {
