@@ -15,6 +15,14 @@ View your app in AI Studio: https://ai.studio/apps/c5d7389a-c234-42bd-9ffa-5c013
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Set `N8N_WEBHOOK_URL` in [.env.local](.env.local) to your n8n webhook URL
 3. Run the app:
    `npm run dev`
+
+For the full form-to-webhook flow locally, run through Vercel Dev so the `/api/lead` serverless function is available.
+
+## Vercel environment variable
+
+Add this variable in Vercel before deploying:
+
+`N8N_WEBHOOK_URL=https://your-n8n-domain.com/webhook/your-webhook-path`

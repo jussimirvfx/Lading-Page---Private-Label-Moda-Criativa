@@ -3,23 +3,85 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { 
   Star, 
   Shirt, 
   TrendingUp, 
   ShieldCheck, 
-  CheckCircle2, 
   Instagram, 
   ChevronRight,
-  ArrowRight,
-  Layers,
-  Factory,
-  Users,
   Tag,
   Truck
 } from 'lucide-react';
+
+type LeadFormData = {
+  ownerName: string;
+  storeName: string;
+  email: string;
+  whatsapp: string;
+  cnpj: string;
+  cityState: string;
+  instagram: string;
+  brandsSold: string;
+  storeType: string;
+  saleType: string;
+  cnpjAge: string;
+};
+
+const initialFormData: LeadFormData = {
+  ownerName: '',
+  storeName: '',
+  email: '',
+  whatsapp: '',
+  cnpj: '',
+  cityState: '',
+  instagram: '',
+  brandsSold: '',
+  storeType: '',
+  saleType: '',
+  cnpjAge: ''
+};
+
+const calculateLeadScore = (data: LeadFormData) => {
+  let score = 0;
+
+  if (data.ownerName && data.storeName && data.email && data.whatsapp && data.cnpj && data.cityState) {
+    score += 20;
+  }
+
+  const storeTypeScore: Record<string, number> = {
+    Boutique: 15,
+    Multimarcas: 20,
+    'Revendedor Autônomo': 5,
+    'Loja de Shopping': 25,
+    'Loja Online': 10,
+    Magazine: 25
+  };
+
+  const saleTypeScore: Record<string, number> = {
+    Atacado: 25,
+    Varejo: 10
+  };
+
+  const cnpjAgeScore: Record<string, number> = {
+    'Menos de 1 ano': 5,
+    'De 1 a 2 anos': 10,
+    'De 2 a 5 anos': 20,
+    'Mais de 5 anos': 25
+  };
+
+  score += storeTypeScore[data.storeType] ?? 0;
+  score += saleTypeScore[data.saleType] ?? 0;
+  score += cnpjAgeScore[data.cnpjAge] ?? 0;
+  score += data.brandsSold.trim() ? 5 : 0;
+  score += data.instagram.trim() ? 5 : 0;
+  score += data.cnpj.length >= 14 ? 10 : 0;
+  score += data.whatsapp.length >= 10 ? 10 : 0;
+
+  return Math.min(score, 100);
+};
 
 // Animation variants
 const fadeIn = {
@@ -29,28 +91,11 @@ const fadeIn = {
   transition: { duration: 0.8 }
 };
 
-const staggerContainer = {
-  initial: { opacity: 0 },
-  whileInView: { opacity: 1 },
-  viewport: { once: false },
-  transition: { staggerChildren: 0.2 }
-};
-
 export default function App() {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [formData, setFormData] = useState({
-    ownerName: '',
-    storeName: '',
-    email: '',
-    whatsapp: '',
-    cnpj: '',
-    cityState: '',
-    instagram: '',
-    brandsSold: '',
-    storeType: '',
-    saleType: '',
-    cnpjAge: ''
-  });
+  const [formData, setFormData] = useState<LeadFormData>(initialFormData);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState('');
 
   useEffect(() => {
     const handleScroll = () => {
@@ -60,10 +105,57 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.currentTarget;
+    setFormData((currentData) => ({
+      ...currentData,
+      [name]: value
+    }));
+  };
+
+  const handleDigitsOnlyChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.currentTarget;
+    setFormData((currentData) => ({
+      ...currentData,
+      [name]: value.replace(/\D/g, '')
+    }));
+  };
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log('Form data:', formData);
-    alert('Obrigado! Em breve nossa equipe entrará em contato.');
+    const leadScore = calculateLeadScore(formData);
+    const payload = {
+      ...formData,
+      pageurl: window.location.href,
+      leadScore,
+      submittedAt: new Date().toISOString()
+    };
+
+    setIsSubmitting(true);
+    setSubmitMessage('');
+
+    try {
+      const response = await fetch('/api/lead', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`API respondeu com status ${response.status}`);
+      }
+
+      setFormData(initialFormData);
+      setSubmitMessage('Obrigado! Em breve nossa equipe entrará em contato.');
+      alert('Obrigado! Em breve nossa equipe entrará em contato.');
+    } catch (error) {
+      console.error('Erro ao enviar lead para o n8n:', error);
+      setSubmitMessage('Não foi possível enviar sua solicitação agora. Tente novamente em instantes.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -342,22 +434,24 @@ export default function App() {
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">Nome do Proprietário</label>
-                <input required type="text" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
+                <input required name="ownerName" value={formData.ownerName} onChange={handleChange} type="text" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">Nome da Loja/Marca</label>
-                <input required type="text" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
+                <input required name="storeName" value={formData.storeName} onChange={handleChange} type="text" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">E-mail Corporativo</label>
-                <input required type="email" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
+                <input required name="email" value={formData.email} onChange={handleChange} type="email" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">WhatsApp da Loja</label>
                 <input 
                   required 
+                  name="whatsapp"
+                  value={formData.whatsapp}
+                  onChange={handleDigitsOnlyChange}
                   type="tel" 
-                  onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ''); }}
                   placeholder="(00) 00000-0000" 
                   className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" 
                 />
@@ -366,27 +460,29 @@ export default function App() {
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">CNPJ</label>
                 <input 
                   required 
+                  name="cnpj"
+                  value={formData.cnpj}
+                  onChange={handleDigitsOnlyChange}
                   type="text" 
-                  onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/\D/g, ''); }}
                   className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" 
                 />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">Cidade / Estado</label>
-                <input required type="text" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
+                <input required name="cityState" value={formData.cityState} onChange={handleChange} type="text" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">@ do Instagram</label>
-                <input type="text" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
+                <input name="instagram" value={formData.instagram} onChange={handleChange} type="text" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">Principais marcas que vende hoje</label>
-                <input type="text" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
+                <input name="brandsSold" value={formData.brandsSold} onChange={handleChange} type="text" className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all" />
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">Qual o seu tipo de loja?</label>
-                <select required className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all appearance-none">
+                <select required name="storeType" value={formData.storeType} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all appearance-none">
                   <option value="">Selecione...</option>
                   <option>Boutique</option>
                   <option>Multimarcas</option>
@@ -398,7 +494,7 @@ export default function App() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">Qual o tipo de venda?</label>
-                <select required className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all appearance-none">
+                <select required name="saleType" value={formData.saleType} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all appearance-none">
                   <option value="">Selecione...</option>
                   <option>Atacado</option>
                   <option>Varejo</option>
@@ -406,7 +502,7 @@ export default function App() {
               </div>
               <div className="md:col-span-2 space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold font-sans text-gray-400">Tempo de CNPJ</label>
-                <select required className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all appearance-none">
+                <select required name="cnpjAge" value={formData.cnpjAge} onChange={handleChange} className="w-full px-4 py-3 rounded-lg border border-gray-100 bg-gray-50/50 font-sans text-sm focus:ring-1 focus:ring-[#D46A34] outline-none transition-all appearance-none">
                   <option value="">Selecione...</option>
                   <option>Menos de 1 ano</option>
                   <option>De 1 a 2 anos</option>
@@ -418,10 +514,16 @@ export default function App() {
               <motion.button 
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
+                disabled={isSubmitting}
                 className="md:col-span-2 mt-6 bg-[#D46A34] text-[#F5F5F5] py-4 lg:py-5 rounded-full font-sans font-bold text-sm uppercase tracking-[0.2em] transition-all hover:bg-[#b55529] shadow-lg shadow-[#D46A34]/20"
               >
-                ENVAR SOLICITAÇÃO
+                {isSubmitting ? 'ENVIANDO...' : 'ENVIAR SOLICITAÇÃO'}
               </motion.button>
+              {submitMessage && (
+                <p className="md:col-span-2 text-center font-sans text-sm text-gray-600">
+                  {submitMessage}
+                </p>
+              )}
             </form>
           </motion.div>
         </div>
