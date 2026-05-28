@@ -50,12 +50,44 @@ export default async function handler(req, res) {
       'store_type',
       'sale_type',
       'cnpj_age',
-      'production_pieces'
+      'production_pieces',
+      'form_answers',
+      'form_answers_by_field'
     ];
     const missingFields = requiredFields.filter((field) => !String(payload[field] ?? '').trim());
 
     if (missingFields.length > 0) {
       return res.status(400).json({ error: 'Missing required fields', fields: missingFields });
+    }
+
+    const requiredFormAnswerFields = [
+      'nome',
+      'storeName',
+      'email',
+      'telefone',
+      'cnpj',
+      'cidade',
+      'estado',
+      'instagram',
+      'brandsSold',
+      'storeType',
+      'saleType',
+      'cnpjAge',
+      'productionPieces'
+    ];
+    const formAnswerFields = Array.isArray(payload.form_answers)
+      ? payload.form_answers.map((answer) => answer?.field)
+      : [];
+    const missingFormAnswerFields = requiredFormAnswerFields.filter((field) => {
+      const groupedAnswer = payload.form_answers_by_field?.[field];
+      return !formAnswerFields.includes(field) || !String(groupedAnswer?.answer ?? '').trim();
+    });
+
+    if (missingFormAnswerFields.length > 0) {
+      return res.status(400).json({
+        error: 'Missing form answer fields',
+        fields: missingFormAnswerFields
+      });
     }
 
     if (!payload.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
